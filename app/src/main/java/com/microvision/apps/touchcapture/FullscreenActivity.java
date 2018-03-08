@@ -16,6 +16,7 @@ import static java.lang.System.out;
  * status bar and navigation/system bar) with user interaction.
  */
 public class FullscreenActivity extends AppCompatActivity {
+
     /**
      * Whether or not the system UI should be auto-hidden after
      * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
@@ -71,6 +72,11 @@ public class FullscreenActivity extends AppCompatActivity {
             hide();
         }
     };
+
+    CameraDelegate mCameraDelegate = null;
+
+
+
     /**
      * Touch listener to use for in-layout UI controls to delay hiding the
      * system UI. This is to prevent the jarring behavior of controls going away
@@ -118,15 +124,24 @@ public class FullscreenActivity extends AppCompatActivity {
                     // how to record these?
 //                    ACTION_POINTER_DOWN
 
-                    @SuppressLint("DefaultLocale") String message = String.format("%d,%s,%f,%f,%s,%d,%d",
+                    String ampEncoded = mCameraDelegate.getAmplitudeEncoded();
+                    String depthEncoded = mCameraDelegate.getDepthEncoded();
+
+                    @SuppressLint("DefaultLocale") String message = String.format("%d, %s, %f, %f, %s, %d, %d, %s, %s",
                             i,
                             event.getAction(),
                             coords.x,
                             coords.y,
                             event.getToolType(i),
                             event.getEventTime(),
-                            event.getDownTime());
+                            event.getDownTime(),
+                            ampEncoded,
+                            depthEncoded
+                    );
                     Log.i("MotionEvent", message);
+
+                    // todo: try to write to file
+
                 }
 
                 if(!(event.getAction() == 0 || event.getAction() == 1 || event.getAction() == 2)){
@@ -139,7 +154,7 @@ public class FullscreenActivity extends AppCompatActivity {
 
         // todo: add gesture recognizer to main screen - onTouchEvent
         // todo: stay in full-screen while gesture recording - small dismiss button in corner
-
+        this.mCameraDelegate = new CameraDelegate();
 
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
@@ -199,4 +214,12 @@ public class FullscreenActivity extends AppCompatActivity {
         mHideHandler.removeCallbacks(mHideRunnable);
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
     }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        this.mCameraDelegate.cleanup();
+    }
 }
+
