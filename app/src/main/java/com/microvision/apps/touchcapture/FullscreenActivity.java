@@ -1,6 +1,8 @@
 package com.microvision.apps.touchcapture;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.os.Environment;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -8,6 +10,9 @@ import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+
+import java.io.File;
+import java.io.FileOutputStream;
 
 import static java.lang.System.out;
 
@@ -95,13 +100,11 @@ public class FullscreenActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_fullscreen);
 
         mVisible = true;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = findViewById(R.id.fullscreen_content);
-
 
         // Set up the user interaction to manually show or hide the system UI.
         mContentView.setOnLongClickListener(new View.OnLongClickListener() {
@@ -121,18 +124,15 @@ public class FullscreenActivity extends AppCompatActivity {
                     MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
                     event.getPointerCoords(i, coords);
 
-                    // how to record these?
-//                    ACTION_POINTER_DOWN
-
                     String ampEncoded = mCameraDelegate.getAmplitudeEncoded();
                     String depthEncoded = mCameraDelegate.getDepthEncoded();
 
-                    @SuppressLint("DefaultLocale") String message = String.format("%d, %s, %f, %f, %s, %d, %d, %s, %s",
+                    @SuppressLint("DefaultLocale") String message = String.format(
+                            "%d, %s, %f, %f, %d, %d, \"%s\", \"%s\"",
                             i,
                             event.getAction(),
                             coords.x,
                             coords.y,
-                            event.getToolType(i),
                             event.getEventTime(),
                             event.getDownTime(),
                             ampEncoded,
@@ -140,8 +140,7 @@ public class FullscreenActivity extends AppCompatActivity {
                     );
                     Log.i("MotionEvent", message);
 
-                    // todo: try to write to file
-
+                    writeLinesToFile(new String [] {message}); // todo: batch these later so we don't keep open/close file
                 }
 
                 if(!(event.getAction() == 0 || event.getAction() == 1 || event.getAction() == 2)){
@@ -220,6 +219,25 @@ public class FullscreenActivity extends AppCompatActivity {
         super.onPause();
 
         this.mCameraDelegate.cleanup();
+    }
+
+    boolean writeLinesToFile(String[] lines){
+        String filename = "data.txt";
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), filename);
+
+        try {
+            FileOutputStream outputStream = new FileOutputStream(file, true);
+            for (int i = 0; i < lines.length; i++) {
+                outputStream.write((lines[i] + "\n").getBytes());
+            }
+            outputStream.close();
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+
+        Log.d("WriteLinesToFile", "Wrote lines to " + file.getPath());
+
+        return true;
     }
 }
 
