@@ -27,6 +27,11 @@ public class CameraDelegate implements Camera.PreviewCallback {
     private ByteBuffer buffer;
     private Camera mCamera = null;
 
+    long framesCount = 0;
+    long startTime = 0;
+    long currentTime = 0;
+    double fps = 0.0;
+
     CameraDelegate(){
         // todo: ask for camera permission
         mCamera = Camera.open();
@@ -90,6 +95,10 @@ public class CameraDelegate implements Camera.PreviewCallback {
     public void onPreviewFrame(byte[] frame, Camera var2){
         byte[] frameCopy = frame.clone();
 
+        if(this.startTime == 0){
+            this.startTime = System.currentTimeMillis();
+        }
+
         // chop up into 120x720x4 then combine high and low bytes
         int k = 0;
         for(int i = 0; i < 720; i++){
@@ -106,6 +115,12 @@ public class CameraDelegate implements Camera.PreviewCallback {
                 amplitudeArray[i][j] = amplitude;
             }
         }
+
+        // calculate fps
+        this.framesCount += 1;
+        this.currentTime = System.currentTimeMillis();
+        this.fps = this.framesCount / ((this.currentTime - this.startTime) / 1000.0);
+        Log.i("FPS", String.format("%f", this.fps));
 
 //        if(bmp != null){
 //            Log.d("CameraDelegate", "Got a bitmap with size: (" + bmp.getWidth() + ", " + bmp.getHeight() + ")" );
