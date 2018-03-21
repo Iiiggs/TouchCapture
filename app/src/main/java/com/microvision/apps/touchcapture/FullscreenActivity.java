@@ -14,6 +14,9 @@ import android.view.View;
 import java.io.File;
 import java.io.FileOutputStream;
 
+import static android.view.MotionEvent.ACTION_DOWN;
+import static android.view.MotionEvent.ACTION_MOVE;
+import static android.view.MotionEvent.ACTION_UP;
 import static java.lang.System.out;
 
 /**
@@ -41,6 +44,9 @@ public class FullscreenActivity extends AppCompatActivity {
     private static final int UI_ANIMATION_DELAY = 300;
     private final Handler mHideHandler = new Handler();
     private View mContentView;
+
+    boolean down = false;
+
     private final Runnable mHidePart2Runnable = new Runnable() {
         @SuppressLint("InlinedApi")
         @Override
@@ -117,35 +123,19 @@ public class FullscreenActivity extends AppCompatActivity {
 
         mContentView.setOnTouchListener(new View.OnTouchListener(){
             public boolean onTouch(View v, MotionEvent event){
+                Log.d("Touch", String.format("%s", event.getAction()));
 
-
-                for(int i = 0; i < event.getPointerCount(); i++){
-
-                    MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-                    event.getPointerCoords(i, coords);
-
-                    String ampEncoded = mCameraDelegate.getAmplitudeEncoded();
-                    String depthEncoded = mCameraDelegate.getDepthEncoded();
-
-                    @SuppressLint("DefaultLocale") String message = String.format(
-                            "%d, %s, %f, %f, %d, %d, \"%s\", \"%s\"",
-                            i,
-                            event.getAction(),
-                            coords.x,
-                            coords.y,
-                            event.getEventTime(),
-                            event.getDownTime(),
-                            ampEncoded,
-                            depthEncoded
-                    );
-                    Log.i("MotionEvent", message);
-
-                    writeLinesToFile(new String [] {message}); // todo: batch these later so we don't keep open/close file
+                if(event.getAction() == ACTION_DOWN || event.getAction() == ACTION_MOVE){
+                    down = true;
+                } else if(event.getAction() == ACTION_UP) {
+                    down = false;
+                } else {
+                    Log.e("TouchDelegate", String.format("Don't know how to work with touch action %d", event.getAction()));
+                    return false;
                 }
 
-                if(!(event.getAction() == 0 || event.getAction() == 1 || event.getAction() == 2)){
-                    Log.i("MotionEvent", event.toString());
-                }
+                // todo: append touch up/down and x/y to file output stream
+                mCameraDelegate.setTouch(down, Math.round(event.getX()), Math.round(event.getY()));
 
                 return false;
             }
@@ -153,7 +143,7 @@ public class FullscreenActivity extends AppCompatActivity {
 
         // todo: add gesture recognizer to main screen - onTouchEvent
         // todo: stay in full-screen while gesture recording - small dismiss button in corner
-        this.mCameraDelegate = new CameraDelegate();
+        this.mCameraDelegate = new CameraDelegate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
 
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
@@ -219,25 +209,6 @@ public class FullscreenActivity extends AppCompatActivity {
         super.onPause();
 
         this.mCameraDelegate.cleanup();
-    }
-
-    boolean writeLinesToFile(String[] lines){
-        String filename = "data.txt";
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), filename);
-
-        try {
-            FileOutputStream outputStream = new FileOutputStream(file, true);
-            for (int i = 0; i < lines.length; i++) {
-                outputStream.write((lines[i] + "\n").getBytes());
-            }
-            outputStream.close();
-        } catch (Exception e){
-            e.printStackTrace();
-        }
-
-        Log.d("WriteLinesToFile", "Wrote lines to " + file.getPath());
-
-        return true;
     }
 }
 
