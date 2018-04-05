@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Environment;
@@ -39,26 +41,28 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
     File externalStorageDirectory;
 
+    boolean recording = false;
+
     boolean touchdown = false;
     int x = -1;
     int y = -1;
 
-    public void setTouch(boolean down, int x, int y){
+    public void setTouch(boolean down, int x, int y) {
         touchdown = down;
         this.x = x;
         this.y = y;
     }
 
-    CameraDelegate(File externalStorageDirectory){
+    CameraDelegate(File externalStorageDirectory) {
         this.externalStorageDirectory = externalStorageDirectory;
 
         // todo: ask for camera permission
         mCamera = Camera.open();
         mCamera.setPreviewCallback(this);
-        Camera.Parameters parameters=mCamera.getParameters();
-        List<Camera.Size> sizes= parameters.getSupportedPreviewSizes();
+        Camera.Parameters parameters = mCamera.getParameters();
+        List<Camera.Size> sizes = parameters.getSupportedPreviewSizes();
         int previewSizeWidth = sizes.get(0).width;
-        int previewSizeHeight =  sizes.get(0).height;
+        int previewSizeHeight = sizes.get(0).height;
         //List<Integer> formats = parameters.getSupportedPreviewFormats();
         int imageFormat = ImageFormat.YUY2;
 
@@ -69,7 +73,7 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
     }
 
-    void cleanup (){
+    void cleanup() {
         mCamera.setPreviewCallback(null);
         mCamera.stopPreview();
         mCamera.release();
@@ -77,52 +81,34 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
     }
 
-    int [][] depthArray = new int [720][120];
-    int [][] amplitudeArray = new int [720][120];
+    int[] depthArray = new int[720*120];
+    int[] amplitudeArray = new int[720*120];
 
-    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
-    public String getDepthEncoded() {
-        int [][] depthArrayCopy = this.depthArray.clone();
-
-        return twoDimensionalArrayToJson(depthArrayCopy);
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
-    public String getAmplitudeEncoded() {
-        int [][] amplitudeArrayCopy = this.amplitudeArray.clone();
-
-        return twoDimensionalArrayToJson(amplitudeArrayCopy);
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
-    private String twoDimensionalArrayToJson(int[][] array) {
-        JSONArray rows = new JSONArray();
-        for(int i = 0; i < array.length; i++){
-
-            try {
-                JSONArray row = new JSONArray(array[i]);
-                rows.put(row);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-        }
-
-        return rows.toString();
-    }
 
     @SuppressLint("DefaultLocale")
     @Override
-    public void onPreviewFrame(byte[] frame, Camera var2){
+    public void onPreviewFrame(byte[] frame, Camera camera) {
+        if(!this.recording){
+            return;
+        }
+
+
         byte[] frameCopy = frame.clone();
 
-        if(this.startTime == 0){
+        if (this.startTime == 0) {
             this.startTime = System.currentTimeMillis();
         }
 
+
+
+        // todo: take every other byte for either depth or amplitude
+
+
+
         // chop up into 120x720x4 then combine high and low bytes
 //        int k = 0;
-//        for(int i = 0; i < 720; i++){
-//            for(int j=0; j < 120; j++){
+//        for (int i = 0; i < 720; i++) {
+//            for (int j = 0; j < 120; j++) {
 //                byte d0 = frameCopy[k++];
 //                byte d1 = frameCopy[k++];
 //                byte a0 = frameCopy[k++];
@@ -131,41 +117,47 @@ public class CameraDelegate implements Camera.PreviewCallback {
 //                int amplitude = ((a1 & 0xff) << 8) | (a0 & 0xff);
 //                int depth = ((d1 & 0xff) << 8) | (d0 & 0xff);
 //
-//                depthArray[i][j] = depth;
-//                amplitudeArray[i][j] = amplitude;
+//                depthArray[k] = depth;
+//                amplitudeArray[k] = amplitude;
 //
 //            }
 //        }
-        // showel depth and amplitude into file
 
         this.currentTime = System.currentTimeMillis();
 
-        // todo: for now, encode touch up/down and x/y into file anme
-        // todo: later, add a file header
-        @SuppressLint("DefaultLocale") String filename = "";
-        if(this.touchdown){
-             filename = String.format("/tof/depth+amp-at_%d-touch_1-x_%d-y_%d.data", this.currentTime, this.x, this.y);
+        // todo: save raw, depth, amp, combined (both bits)
+        @SuppressLint("DefaultLocale") String rawFilename = "/tof/depth+amp";
+
+        if (this.touchdown) {
+            rawFilename = String.format("%s-at_%d-touch_1-x_%d-y_%d.dat", rawFilename, this.currentTime, this.x, this.y);
         } else {
-            filename = String.format("/tof/depth+amp-at_%d-touch_0-x_None-y_None.data", this.currentTime);
+            rawFilename = String.format("%s-at_%d-touch_0-x_None-y_None.dat", rawFilename, this.currentTime);
         }
+        Camera.Parameters parameters = camera.getParameters();
+        Camera.Size size = parameters.getPreviewSize();
+        int previewFormat = parameters.getPreviewFormat();
 
-        File outputFile  = new File(this.externalStorageDirectory, filename);
-
-        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            fos.write(frame);
-        } catch (IOException e){
-            Log.e("CameraDelegate", "Can't write file");
-        }
+        writeFrameToFile(frame, rawFilename);
 
         // calculate fps
         this.framesCount += 1;
 
         this.fps = this.framesCount / ((this.currentTime - this.startTime) / 1000.0);
         Log.i("FPS", String.format("%f - %s", this.fps, touchdown ? "Down" : "Up"));
-
-//        if(bmp != null){
-//            Log.d("CameraDelegate", "Got a bitmap with size: (" + bmp.getWidth() + ", " + bmp.getHeight() + ")" );
-//        }
     }
 
+    void writeFrameToFile(byte[] frame, String filename){
+        File outputFile  = new File(this.externalStorageDirectory, filename);
+
+
+
+        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+            // build bitmap here
+            fos.write(frame);
+
+            // todo: rollback to just writing the frame to file
+        } catch (IOException e){
+            Log.e("CameraDelegate", "Can't write file");
+        }
+    }
 }
