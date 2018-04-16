@@ -58,19 +58,26 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
         // todo: ask for camera permission
         mCamera = Camera.open();
-        mCamera.setPreviewCallback(this);
-        Camera.Parameters parameters = mCamera.getParameters();
-        List<Camera.Size> sizes = parameters.getSupportedPreviewSizes();
-        int previewSizeWidth = sizes.get(0).width;
-        int previewSizeHeight = sizes.get(0).height;
-        //List<Integer> formats = parameters.getSupportedPreviewFormats();
-        int imageFormat = ImageFormat.YUY2;
+        if(mCamera != null) {
+            mCamera.setPreviewCallback(this);
+            Camera.Parameters parameters = mCamera.getParameters();
+            List<Camera.Size> sizes = parameters.getSupportedPreviewSizes();
+            int previewSizeWidth = sizes.get(0).width;
+            int previewSizeHeight = sizes.get(0).height;
+            //List<Integer> formats = parameters.getSupportedPreviewFormats();
+            int imageFormat = ImageFormat.YUY2;
 
-        parameters.setPreviewSize(previewSizeWidth, previewSizeHeight);
-        parameters.setPreviewFormat(imageFormat);
-        mCamera.setParameters(parameters);
-        mCamera.startPreview();
+            parameters.setPreviewSize(previewSizeWidth, previewSizeHeight);
+            parameters.setPreviewFormat(imageFormat);
+            mCamera.setParameters(parameters);
 
+
+            if (Constants.CAPTURE_TOF) {
+                mCamera.startPreview();
+            }
+        } else {
+            Log.d("CameraDelegate", "Camera not opened correctly");
+        }
     }
 
     void cleanup() {
@@ -85,7 +92,9 @@ public class CameraDelegate implements Camera.PreviewCallback {
     int[] amplitudeArray = new int[720*120];
 
 
-    @SuppressLint("DefaultLocale")
+//    @SuppressLint("DefaultLocale")
+
+
     @Override
     public void onPreviewFrame(byte[] frame, Camera camera) {
         if(!this.recording){

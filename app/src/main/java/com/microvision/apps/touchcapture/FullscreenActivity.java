@@ -2,6 +2,7 @@ package com.microvision.apps.touchcapture;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.os.AsyncTask;
 import android.os.Environment;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
@@ -10,7 +11,12 @@ import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.Transformation;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,6 +53,12 @@ public class FullscreenActivity extends AppCompatActivity {
     private View mContentView;
 
     boolean down = false;
+
+    ImageView circle;
+    ProgressBar progress;
+
+    LocationIterator locationIterator = new LocationIterator(Constants.TILES_WIDTH, Constants.TILES_HEIGHT);
+
 
     private final Runnable mHidePart2Runnable = new Runnable() {
         @SuppressLint("InlinedApi")
@@ -122,7 +134,7 @@ public class FullscreenActivity extends AppCompatActivity {
 
         mVisible = true;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
-        mContentView = findViewById(R.id.fullscreen_content);
+        mContentView = findViewById(R.id.fullscreenContent);
 
         // Set up the user interaction to manually show or hide the system UI.
         mContentView.setOnLongClickListener(new View.OnLongClickListener() {
@@ -161,7 +173,82 @@ public class FullscreenActivity extends AppCompatActivity {
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
         findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+
+
+        this.circle = this.findViewById(R.id.circle);
+        this.progress = this.findViewById(R.id.determinateBar);
+
+        // attach a click listener
+        this.circle.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){
+                // move to next location
+                moveSpriteToNextPosition();
+            }
+        });
     }
+
+    private void testSprite() {
+        AsyncTask.execute(new Runnable() {
+            @Override
+            public void run() {
+                //TODO your background code
+
+                while(moveSpriteToNextPosition()){
+                    try {
+                        Thread.sleep(350);
+                    } catch (InterruptedException e){
+                        Log.e("FullscreenActivity", e.getLocalizedMessage());
+                    }
+                };
+            }
+        });
+    }
+
+    boolean moveSpriteToNextPosition(){
+        final Location nextLocation = locationIterator.nextLocation();
+
+        if (nextLocation == null) return false;
+
+        Log.d("NextPosition", nextLocation.toString());
+
+        runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+
+                              // todo: use ObjectAnimator
+                              ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) circle.getLayoutParams();
+
+                              final int Xs = p.leftMargin;
+                              final int Ys = p.topMargin;
+                              final int Xf = nextLocation.getSpritePosition().x;
+                              final int Yf = nextLocation.getSpritePosition().y;
+
+                              Animation a = new Animation() {
+                                  @Override
+                                  protected void applyTransformation(float interpolatedTime, Transformation t) {
+                                      Log.d("ApplyTranformation", String.format("%f", interpolatedTime));
+                                      float Xt = Xs + (Xf - Xs) * interpolatedTime;
+                                      float Yt = Ys + (Yf - Ys) * interpolatedTime;
+
+                                      progress.setProgress(locationIterator.getProgress(), true);
+
+                                      ViewGroup.MarginLayoutParams Pt = (ViewGroup.MarginLayoutParams) circle.getLayoutParams();
+                                      Pt.leftMargin = Math.round(Xt);
+                                      Pt.topMargin = Math.round(Yt);
+                                      circle.setLayoutParams(Pt);
+                                  }
+                              };
+
+                              a.setDuration(250);
+                              circle.startAnimation(a);
+                              Log.d("FullscreenActivity", "Starting view animation");
+                          }
+                      }
+        );
+
+        return true;
+    }
+
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
@@ -176,6 +263,7 @@ public class FullscreenActivity extends AppCompatActivity {
     private void toggle() {
         if (mVisible) {
             hide();
+            testSprite();
         } else {
             show();
         }
