@@ -72,8 +72,9 @@ public class CameraDelegate implements Camera.PreviewCallback {
             mCamera.setParameters(parameters);
 
 
-            if (Constants.CAPTURE_TOF) {
-                mCamera.startPreview();
+           if (Constants.CAPTURE_TOF) {
+               recording = true;
+               mCamera.startPreview();
             }
         } else {
             Log.d("CameraDelegate", "Camera not opened correctly");
