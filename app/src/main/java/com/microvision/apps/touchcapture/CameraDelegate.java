@@ -42,16 +42,33 @@ public class CameraDelegate implements Camera.PreviewCallback {
     File externalStorageDirectory;
 
     boolean recording = false;
-
     boolean touchdown = false;
     int x = -1;
     int y = -1;
+
+
+    int framesSinceTouchdown = 0;
+
+    RingBuffer recordingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
+    RingBuffer archivingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
+
+
 
     public void setTouch(boolean down, int x, int y) {
         touchdown = down;
         this.x = x;
         this.y = y;
+
     }
+
+    public void swapBuffersAndArchive(){
+        // recordingFrameBuffer is ready to be archived
+        // archivingFrameBuffer is ready to start recording
+        RingBuffer temp = this.recordingFrameBuffer;
+        this.recordingFrameBuffer = this.archivingFrameBuffer;
+        this.archivingFrameBuffer = temp;
+        archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH * 2);
+    }   
 
     CameraDelegate(File externalStorageDirectory) {
         this.externalStorageDirectory = externalStorageDirectory;
@@ -73,7 +90,7 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
 
            if (Constants.CAPTURE_TOF) {
-               recording = true;
+//               recording = true;
                mCamera.startPreview();
             }
         } else {
@@ -102,72 +119,90 @@ public class CameraDelegate implements Camera.PreviewCallback {
             return;
         }
 
+        // record N frames before and after touch
+        // circular buffer of last N frames
+        // if touch started, record next M frames to file? and N frames before?
+        // need separate queue for writing to file - perhaps first fill up N*2 buffer then write?
 
-        byte[] frameCopy = frame.clone();
+        recordTimeFrameReceived();
+        String filename = getFilename();
+        putFrameInBuffer(frame);
+    }
 
+    private String getFilename(){
+        @SuppressLint("DefaultLocale") String filename = "/tof/depth+amp";
+        if (this.touchdown) {
+            filename = String.format("%s-at_%d-touch_1-x_%d-y_%d.dat", filename, this.currentTime, this.x, this.y);
+        } else {
+            filename = String.format("%s-at_%d-touch_0-x_None-y_None.dat", filename, this.currentTime);
+        }
+
+        return filename;
+    }
+
+    private void recordTimeFrameReceived(){
         if (this.startTime == 0) {
             this.startTime = System.currentTimeMillis();
         }
 
-
-
-        // todo: take every other byte for either depth or amplitude
-
-
-
-        // chop up into 120x720x4 then combine high and low bytes
-//        int k = 0;
-//        for (int i = 0; i < 720; i++) {
-//            for (int j = 0; j < 120; j++) {
-//                byte d0 = frameCopy[k++];
-//                byte d1 = frameCopy[k++];
-//                byte a0 = frameCopy[k++];
-//                byte a1 = frameCopy[k++];
-//
-//                int amplitude = ((a1 & 0xff) << 8) | (a0 & 0xff);
-//                int depth = ((d1 & 0xff) << 8) | (d0 & 0xff);
-//
-//                depthArray[k] = depth;
-//                amplitudeArray[k] = amplitude;
-//
-//            }
-//        }
-
         this.currentTime = System.currentTimeMillis();
-
-        // todo: save raw, depth, amp, combined (both bits)
-        @SuppressLint("DefaultLocale") String rawFilename = "/tof/depth+amp";
-
-        if (this.touchdown) {
-            rawFilename = String.format("%s-at_%d-touch_1-x_%d-y_%d.dat", rawFilename, this.currentTime, this.x, this.y);
-        } else {
-            rawFilename = String.format("%s-at_%d-touch_0-x_None-y_None.dat", rawFilename, this.currentTime);
-        }
-        Camera.Parameters parameters = camera.getParameters();
-        Camera.Size size = parameters.getPreviewSize();
-        int previewFormat = parameters.getPreviewFormat();
-
-        writeFrameToFile(frame, rawFilename);
 
         // calculate fps
         this.framesCount += 1;
-
         this.fps = this.framesCount / ((this.currentTime - this.startTime) / 1000.0);
         Log.i("FPS", String.format("%f - %s", this.fps, touchdown ? "Down" : "Up"));
+
     }
 
     void writeFrameToFile(byte[] frame, String filename){
         File outputFile  = new File(this.externalStorageDirectory, filename);
 
-
-
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            // build bitmap here
             fos.write(frame);
-
-            // todo: rollback to just writing the frame to file
         } catch (IOException e){
             Log.e("CameraDelegate", "Can't write file");
         }
+    }
+
+    void putFrameInBuffer(byte [] frame){
+        FrameWithMetadata payload = new FrameWithMetadata(frame, getFilename());
+
+        if(recordingFrameBuffer.put(payload)){
+            Log.d("CameraDelegate", "Put some frame in the buffer");
+        }
+        else {
+            Log.d("CameraDelegate", "Not able to put some frames in buffer");
+        }
+
+        if(touchdown){
+            if(++framesSinceTouchdown == Constants.FRAMES_PER_TOUCH){
+                // now we want to record last Constants.FRAMES_PER_TOUCH*2 frames
+                swapBuffersAndArchive();
+                this.framesSinceTouchdown = 0;
+            }
+        }
+    }
+
+    void archiveFramesFromBuffer(int N){
+        if(archivingFrameBuffer.elements.length < N){
+            Log.d("CameraDelegate", "Not enough frames to save");
+            return;
+        }
+
+        for(int i = 0; i < N; i++){
+            FrameWithMetadata payload = archivingFrameBuffer.take();
+            if(payload != null){
+                writeFrameToFile(payload.frame, payload.metadata);
+            } else {
+                Log.d("CameraDelegate", "Got null back when expecting a frame from a full buffer");
+            }
+
+        }
+
+        // throw away anything that's left
+        this.archivingFrameBuffer.reset();
+
+        // now move to next position
+
     }
 }

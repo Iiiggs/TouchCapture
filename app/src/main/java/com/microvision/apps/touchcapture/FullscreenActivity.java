@@ -158,15 +158,12 @@ public class FullscreenActivity extends AppCompatActivity {
                     return false;
                 }
 
-                // todo: append touch up/down and x/y to file output stream
                 mCameraDelegate.setTouch(down, Math.round(event.getX()), Math.round(event.getY()));
 
                 return false;
             }
         });
 
-        // todo: add gesture recognizer to main screen - onTouchEvent
-        // todo: stay in full-screen while gesture recording - small dismiss button in corner
         this.mCameraDelegate = new CameraDelegate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
 
         // Upon interacting with UI controls, delay any scheduled hide()
@@ -191,8 +188,6 @@ public class FullscreenActivity extends AppCompatActivity {
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
-                //TODO your background code
-
                 while(moveSpriteToNextPosition()){
                     try {
                         Thread.sleep(350);
@@ -207,7 +202,7 @@ public class FullscreenActivity extends AppCompatActivity {
     boolean moveSpriteToNextPosition(){
         final Location nextLocation = locationIterator.nextLocation();
 
-        if (nextLocation == null) return false;
+        if (nextLocation == null || !mCameraDelegate.recording) return false;
 
         Log.d("NextPosition", nextLocation.toString());
 
@@ -263,7 +258,7 @@ public class FullscreenActivity extends AppCompatActivity {
     private void toggle() {
         if (mVisible) {
             hide();
-            testSprite();
+//            testSprite();
         } else {
             show();
         }
