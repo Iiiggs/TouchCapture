@@ -49,9 +49,9 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
     int framesSinceTouchdown = 0;
 
-    RingBuffer recordingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
-    RingBuffer archivingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
-
+//    RingBuffer recordingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
+//    RingBuffer archivingFrameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
+    RingBuffer frameBuffer = new RingBuffer(Constants.BUFFER_SIZE);
 
 
     public void setTouch(boolean down, int x, int y) {
@@ -61,14 +61,14 @@ public class CameraDelegate implements Camera.PreviewCallback {
 
     }
 
-    public void swapBuffersAndArchive(){
-        // recordingFrameBuffer is ready to be archived
-        // archivingFrameBuffer is ready to start recording
-        RingBuffer temp = this.recordingFrameBuffer;
-        this.recordingFrameBuffer = this.archivingFrameBuffer;
-        this.archivingFrameBuffer = temp;
-        archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH * 2);
-    }   
+//    public void swapBuffersAndArchive(){
+//        // recordingFrameBuffer is ready to be archived
+//        // archivingFrameBuffer is ready to start recording
+//        RingBuffer temp = this.recordingFrameBuffer;
+//        this.recordingFrameBuffer = this.archivingFrameBuffer;
+//        this.archivingFrameBuffer = temp;
+//        archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH * 2);
+//    }
 
     CameraDelegate(File externalStorageDirectory) {
         this.externalStorageDirectory = externalStorageDirectory;
@@ -125,7 +125,6 @@ public class CameraDelegate implements Camera.PreviewCallback {
         // need separate queue for writing to file - perhaps first fill up N*2 buffer then write?
 
         recordTimeFrameReceived();
-        String filename = getFilename();
         putFrameInBuffer(frame);
     }
 
@@ -167,7 +166,7 @@ public class CameraDelegate implements Camera.PreviewCallback {
     void putFrameInBuffer(byte [] frame){
         FrameWithMetadata payload = new FrameWithMetadata(frame, getFilename());
 
-        if(recordingFrameBuffer.put(payload)){
+        if(frameBuffer.put(payload)){
             Log.d("CameraDelegate", "Put some frame in the buffer");
         }
         else {
@@ -177,20 +176,20 @@ public class CameraDelegate implements Camera.PreviewCallback {
         if(touchdown){
             if(++framesSinceTouchdown == Constants.FRAMES_PER_TOUCH){
                 // now we want to record last Constants.FRAMES_PER_TOUCH*2 frames
-                swapBuffersAndArchive();
+                archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH*2);
                 this.framesSinceTouchdown = 0;
             }
         }
     }
 
     void archiveFramesFromBuffer(int N){
-        if(archivingFrameBuffer.elements.length < N){
+        if(frameBuffer.elements.length < N){
             Log.d("CameraDelegate", "Not enough frames to save");
             return;
         }
 
         for(int i = 0; i < N; i++){
-            FrameWithMetadata payload = archivingFrameBuffer.take();
+            FrameWithMetadata payload = frameBuffer.take();
             if(payload != null){
                 writeFrameToFile(payload.frame, payload.metadata);
             } else {
@@ -200,7 +199,7 @@ public class CameraDelegate implements Camera.PreviewCallback {
         }
 
         // throw away anything that's left
-        this.archivingFrameBuffer.reset();
+        frameBuffer.reset();
 
         // now move to next position
 
