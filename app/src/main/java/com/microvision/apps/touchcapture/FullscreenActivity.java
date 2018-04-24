@@ -26,11 +26,19 @@ import static android.view.MotionEvent.ACTION_MOVE;
 import static android.view.MotionEvent.ACTION_UP;
 import static java.lang.System.out;
 
+// todo:
+//      unit test?
+//      refactor for testability/debugging
+//      state transitions
+//      - move sprite after touch captured
+
+
+
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
  */
-public class FullscreenActivity extends AppCompatActivity {
+public class FullscreenActivity extends AppCompatActivity implements CaptureController.CaptureControllerUIDelegate {
 
     /**
      * Whether or not the system UI should be auto-hidden after
@@ -50,15 +58,12 @@ public class FullscreenActivity extends AppCompatActivity {
      */
     private static final int UI_ANIMATION_DELAY = 300;
     private final Handler mHideHandler = new Handler();
-    private View mContentView;
+    View mContentView;
+    ImageView mCircleView;
+    ProgressBar mProgressView;
+    Button mRecordButton;
 
-    boolean down = false;
-
-    ImageView circle;
-    ProgressBar progress;
-
-    LocationIterator locationIterator = new LocationIterator(Constants.TILES_WIDTH, Constants.TILES_HEIGHT);
-
+    CaptureController mCaptureController = new CaptureController(this);
 
     private final Runnable mHidePart2Runnable = new Runnable() {
         @SuppressLint("InlinedApi")
@@ -97,10 +102,6 @@ public class FullscreenActivity extends AppCompatActivity {
         }
     };
 
-    CameraDelegate mCameraDelegate = null;
-
-
-
     /**
      * Touch listener to use for in-layout UI controls to delay hiding the
      * system UI. This is to prevent the jarring behavior of controls going away
@@ -109,17 +110,6 @@ public class FullscreenActivity extends AppCompatActivity {
     private final View.OnTouchListener mDelayHideTouchListener = new View.OnTouchListener() {
         @Override
         public boolean onTouch(View view, MotionEvent motionEvent) {
-            if (motionEvent.getAction() == MotionEvent.ACTION_UP){
-                Log.d("FullscreenActivity", "Toggle something");
-
-                mCameraDelegate.recording = !mCameraDelegate.recording;
-                if(mCameraDelegate.recording){
-                    ((Button)view).setText("Stop");
-                } else {
-                    ((Button)view).setText("Record");
-                }
-            }
-
             if (AUTO_HIDE) {
                 delayedHide(AUTO_HIDE_DELAY_MILLIS);
             }
@@ -135,6 +125,9 @@ public class FullscreenActivity extends AppCompatActivity {
         mVisible = true;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = findViewById(R.id.fullscreenContent);
+        mRecordButton = findViewById(R.id.record_button);
+        mCircleView = this.findViewById(R.id.circle);
+        mProgressView  = this.findViewById(R.id.determinateBar);
 
         // Set up the user interaction to manually show or hide the system UI.
         mContentView.setOnLongClickListener(new View.OnLongClickListener() {
@@ -149,99 +142,27 @@ public class FullscreenActivity extends AppCompatActivity {
             public boolean onTouch(View v, MotionEvent event){
                 Log.d("Touch", String.format("%s", event.getAction()));
 
-                if(event.getAction() == ACTION_DOWN || event.getAction() == ACTION_MOVE){
-                    down = true;
-                } else if(event.getAction() == ACTION_UP) {
-                    down = false;
-                } else {
-                    Log.e("TouchDelegate", String.format("Don't know how to work with touch action %d", event.getAction()));
-                    return false;
-                }
-
-                mCameraDelegate.setTouch(down, Math.round(event.getX()), Math.round(event.getY()));
+                mCaptureController.processTouchEvent(event);
 
                 return false;
             }
         });
 
-        this.mCameraDelegate = new CameraDelegate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+        mRecordButton.setOnClickListener(new Button.OnClickListener(){
+            @Override
+            public void onClick(View view) {
+                Log.e("mRecordButton", "OnClick Event");
+                mCaptureController.toggleRecording();
+            }
+        });
 
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
-        findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
-
-
-        this.circle = this.findViewById(R.id.circle);
-        this.progress = this.findViewById(R.id.determinateBar);
 
         // attach a click listener
-        this.circle.setOnClickListener(new View.OnClickListener(){
+        this.mCircleView.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){
-                // move to next location
-                moveSpriteToNextPosition();
+                // pass for now, but we may want to record this in CaptureController later
             }
         });
-    }
-
-    private void testSprite() {
-        AsyncTask.execute(new Runnable() {
-            @Override
-            public void run() {
-                while(moveSpriteToNextPosition()){
-                    try {
-                        Thread.sleep(350);
-                    } catch (InterruptedException e){
-                        Log.e("FullscreenActivity", e.getLocalizedMessage());
-                    }
-                };
-            }
-        });
-    }
-
-    boolean moveSpriteToNextPosition(){
-        final Location nextLocation = locationIterator.nextLocation();
-
-        if (nextLocation == null || !mCameraDelegate.recording) return false;
-
-        Log.d("NextPosition", nextLocation.toString());
-
-        runOnUiThread(new Runnable() {
-                          @Override
-                          public void run() {
-
-                              // todo: use ObjectAnimator
-                              ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) circle.getLayoutParams();
-
-                              final int Xs = p.leftMargin;
-                              final int Ys = p.topMargin;
-                              final int Xf = nextLocation.getSpritePosition().x;
-                              final int Yf = nextLocation.getSpritePosition().y;
-
-                              Animation a = new Animation() {
-                                  @Override
-                                  protected void applyTransformation(float interpolatedTime, Transformation t) {
-                                      Log.d("ApplyTranformation", String.format("%f", interpolatedTime));
-                                      float Xt = Xs + (Xf - Xs) * interpolatedTime;
-                                      float Yt = Ys + (Yf - Ys) * interpolatedTime;
-
-                                      progress.setProgress(locationIterator.getProgress(), true);
-
-                                      ViewGroup.MarginLayoutParams Pt = (ViewGroup.MarginLayoutParams) circle.getLayoutParams();
-                                      Pt.leftMargin = Math.round(Xt);
-                                      Pt.topMargin = Math.round(Yt);
-                                      circle.setLayoutParams(Pt);
-                                  }
-                              };
-
-                              a.setDuration(250);
-                              circle.startAnimation(a);
-                              Log.d("FullscreenActivity", "Starting view animation");
-                          }
-                      }
-        );
-
-        return true;
     }
 
 
@@ -258,7 +179,6 @@ public class FullscreenActivity extends AppCompatActivity {
     private void toggle() {
         if (mVisible) {
             hide();
-//            testSprite();
         } else {
             show();
         }
@@ -304,7 +224,56 @@ public class FullscreenActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
 
-        this.mCameraDelegate.cleanup();
+        this.mCaptureController.cleanup();
+    }
+
+
+    @Override
+    public void recordingStateUpdated(CaptureState.RecordingState s) {
+        switch (s){
+            case RECORDING:
+                this.mRecordButton.setText("Stop");
+                break;
+            case STOPPED:
+                this.mRecordButton.setText("Record");
+                break;
+        }
+    }
+
+    @Override
+    public void moveSpriteToNewLocation(final Location location, final int progress) {
+        runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+                              // todo: use ObjectAnimator
+                              ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) mCircleView.getLayoutParams();
+
+                              final int Xs = p.leftMargin;
+                              final int Ys = p.topMargin;
+                              final int Xf = location.getSpritePosition().x;
+                              final int Yf = location.getSpritePosition().y;
+
+                              Animation a = new Animation() {
+                                  @Override
+                                  protected void applyTransformation(float interpolatedTime, Transformation t) {
+                                      Log.d("ApplyTranformation", String.format("%f", interpolatedTime));
+                                      float Xt = Xs + (Xf - Xs) * interpolatedTime;
+                                      float Yt = Ys + (Yf - Ys) * interpolatedTime;
+
+                                      mProgressView.setProgress(progress, true);
+
+                                      ViewGroup.MarginLayoutParams Pt = (ViewGroup.MarginLayoutParams) mCircleView.getLayoutParams();
+                                      Pt.leftMargin = Math.round(Xt);
+                                      Pt.topMargin = Math.round(Yt);
+                                      mCircleView.setLayoutParams(Pt);
+                                  }
+                              };
+
+                              a.setDuration(250);
+                              mCircleView.startAnimation(a);
+                              Log.d("FullscreenActivity", "Starting view animation");
+                          }
+                      }
+        );
     }
 }
-
