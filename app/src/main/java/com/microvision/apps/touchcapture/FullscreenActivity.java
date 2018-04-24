@@ -158,11 +158,14 @@ public class FullscreenActivity extends AppCompatActivity implements CaptureCont
 
 
         // attach a click listener
-        this.mCircleView.setOnClickListener(new View.OnClickListener(){
-            public void onClick(View v){
-                // pass for now, but we may want to record this in CaptureController later
-            }
-        });
+//        this.mCircleView.setOnTouchListener(new View.OnTouchListener() {
+//            @Override
+//            public boolean onTouch(View view, MotionEvent motionEvent) {
+//
+//
+//                return false;
+//            }
+//        });
     }
 
 

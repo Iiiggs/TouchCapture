@@ -56,18 +56,10 @@ public class CaptureController implements PointCloudAdapter.PointCloudDelegate {
         FrameWithMetadata payload = new FrameWithMetadata(frame, getFilename());
 
         if(mFrameBuffer.put(payload)){
-            Log.d("CameraDelegate", "Put some frame in the buffer");
+//            Log.d("CameraDelegate", "Put some frame in the buffer");
         }
         else {
             Log.d("CameraDelegate", "Not able to put some frames in buffer");
-        }
-
-        if(mCaptureState.touchdown){
-            if(++mCaptureState.framesSinceTouchdown == Constants.FRAMES_PER_TOUCH){
-                // now we want to record last Constants.FRAMES_PER_TOUCH*2 frames
-                archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH*2);
-                mCaptureState.framesSinceTouchdown = 0;
-            }
         }
     }
 
@@ -86,11 +78,8 @@ public class CaptureController implements PointCloudAdapter.PointCloudDelegate {
             }
 
         }
-
         // throw away anything that's left
         mFrameBuffer.reset();
-
-        // now move to next position
     }
 
     void processTouchEvent(MotionEvent event){
@@ -106,8 +95,6 @@ public class CaptureController implements PointCloudAdapter.PointCloudDelegate {
         }
 
         setTouch(down, Math.round(event.getX()), Math.round(event.getY()));
-
-        moveSpriteToNextPosition();
     }
 
     void toggleRecording(){
@@ -148,6 +135,17 @@ public class CaptureController implements PointCloudAdapter.PointCloudDelegate {
         }
 
         putFrameInBuffer(frame);
+
+        // todo: we have to decide what to do with frames that are touching after the sprite has moved..
+        if(mCaptureState.touchdown){
+            Log.d("CaptureController", "Got a frame while finger is down");
+            if(++mCaptureState.framesSinceTouchdown == Constants.FRAMES_PER_TOUCH){
+                // now we want to record last Constants.FRAMES_PER_TOUCH*2 frames
+                archiveFramesFromBuffer(Constants.FRAMES_PER_TOUCH*2);
+                mCaptureState.framesSinceTouchdown = 0;
+                moveSpriteToNextPosition();
+            }
+        }
     }
 
     private void recordTimeFrameReceived(){

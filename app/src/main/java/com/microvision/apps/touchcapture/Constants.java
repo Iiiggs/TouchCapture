@@ -9,7 +9,7 @@ public class Constants {
     static final int SPRITE_HEIGHT = 60;
     static final int TILES_WIDTH = 32;
     static final int TILES_HEIGHT = 18;
-    static final boolean CAPTURE_TOF = false;
+    static final boolean CAPTURE_TOF = true;
     static final int BUFFER_SIZE = 20;
     static final int FRAMES_PER_TOUCH = 10;
     static final String STORAGE_FOLDER = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath();
